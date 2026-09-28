@@ -1,3 +1,5 @@
 node_modules/
 .env
 *.key
+seller-pool.json
+seller-used.json

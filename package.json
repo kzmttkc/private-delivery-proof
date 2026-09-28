@@ -4,11 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test 'test/*.test.mjs'",
+    "fork": "hardhat --config hardhat.config.cjs node --port 8545",
+    "demo": "node run-demo.mjs",
+    "verify": "node verify.mjs records"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@x402/core": "^2.27.0",
@@ -16,5 +19,9 @@
     "@x402/extensions": "^2.27.0",
     "poseidon-lite": "^0.3.0",
     "viem": "^2.56.9"
-  }
+  },
+  "devDependencies": {
+    "hardhat": "^2.29.1"
+  },
+  "private": true
 }
