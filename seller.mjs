@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import { createWalletClient, http as viemHttp, publicActions } from 'viem';
 import { base } from 'viem/chains';
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { ExactEvmScheme } from '@x402/evm/exact/facilitator';
 import { toFacilitatorEvmSigner } from '@x402/evm';
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader, encodePaymentResponseHeader } from '@x402/core/http';
@@ -19,7 +19,7 @@ const ORIGIN = process.env.SELLER_ORIGIN ?? `http://127.0.0.1:${PORT}`;
 const PATH = '/v1/quote';
 const signKey = privateKeyToAccount(env.SELLER_SIGN_KEY);
 const signTypedData = (args) => signKey.signTypedData(args);
-const gas = privateKeyToAccount(env.SELLER_GAS_KEY);
+const gas = privateKeyToAccount(env.SELLER_GAS_KEY, { nonceManager });
 const wallet = createWalletClient({ account: gas, chain: base, transport: viemHttp(BASE.rpc) }).extend(publicActions);
 const facilitator = new ExactEvmScheme(toFacilitatorEvmSigner({ ...wallet, address: gas.address }));
 

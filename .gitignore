@@ -3,3 +3,5 @@ node_modules/
 *.key
 seller-pool.json
 seller-used.json
+cache/
+artifacts/

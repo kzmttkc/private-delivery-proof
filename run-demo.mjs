@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import readline from 'node:readline/promises';
 import { createWalletClient, http, publicActions, erc20Abi, parseAbi, parseEther, formatEther, formatUnits, decodeEventLog, decodeFunctionData, sha256 } from 'viem';
 import { base } from 'viem/chains';
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { PERMIT2_ADDRESS, x402ExactPermit2ProxyABI } from '@x402/evm';
 import { encodePaymentSignatureHeader, decodePaymentResponseHeader } from '@x402/core/http';
@@ -15,7 +15,7 @@ import { startSeller, PRICE } from './seller.mjs';
 const N = Number(process.env.PURCHASES ?? 20);
 const WRAP = 1_000_000n; // 1 USDC
 const GAS_TOPUP = parseEther('0.001');
-const buyer = privateKeyToAccount(env.BUYER_KEY);
+const buyer = privateKeyToAccount(env.BUYER_KEY, { nonceManager });
 const w = createWalletClient({ account: buyer, chain: base, transport: http(BASE.rpc) }).extend(publicActions);
 const lmAbi = parseAbi(['function wrap(uint256 amount, address receiver) payable returns (uint256)']);
 const indexedAbi = parseAbi(['event IndexedTransfer(uint256 indexed index, address from, address to, uint256 value)']);
@@ -45,13 +45,21 @@ if (process.env.AUTO_YES !== '1') {
   if (ans !== 'yes') { console.log('中止しました。何も送っていません。'); process.exit(0); }
 }
 
-const send = async (label, p) => { const hash = await p; const r = await w.waitForTransactionReceipt({ hash }); if (r.status !== 'success') throw new Error(`${label} failed ${hash}`); console.log(`  ok ${label} https://basescan.org/tx/${hash}`); };
+const send = async (label, p, visible) => {
+  const hash = await p; const r = await w.waitForTransactionReceipt({ hash });
+  if (r.status !== 'success') throw new Error(`${label} failed ${hash}`);
+  console.log(`  ok ${label} https://basescan.org/tx/${hash}`);
+  // The public RPC is load-balanced; wait until the new state is visible before the next step.
+  for (let i = 0; visible && i < 30 && !(await visible()); i++) await new Promise((ok) => setTimeout(ok, 2000));
+};
+const lmAllowance = () => w.readContract({ address: BASE.USDC, abi: erc20Abi, functionName: 'allowance', args: [buyer.address, BASE.ZUSDC_LIQUIDITY_MANAGER] });
 if (zBal < need) {
-  await send('USDC approve', w.writeContract({ address: BASE.USDC, abi: erc20Abi, functionName: 'approve', args: [BASE.ZUSDC_LIQUIDITY_MANAGER, WRAP] }));
-  await send('wrap', w.writeContract({ address: BASE.ZUSDC_LIQUIDITY_MANAGER, abi: lmAbi, functionName: 'wrap', args: [WRAP, buyer.address] }));
+  if ((await lmAllowance()) < WRAP) await send('USDC approve', w.writeContract({ address: BASE.USDC, abi: erc20Abi, functionName: 'approve', args: [BASE.ZUSDC_LIQUIDITY_MANAGER, WRAP] }), async () => (await lmAllowance()) >= WRAP);
+  await send('wrap', w.writeContract({ address: BASE.ZUSDC_LIQUIDITY_MANAGER, abi: lmAbi, functionName: 'wrap', args: [WRAP, buyer.address] }), async () => (await bal(BASE.ZUSDC, buyer.address)) >= need);
 }
-if (allowance < need) await send('zUSDC approve Permit2', w.writeContract({ address: BASE.ZUSDC, abi: erc20Abi, functionName: 'approve', args: [PERMIT2_ADDRESS, WRAP] }));
-if (sellerEth < GAS_TOPUP / 2n) await send('seller gas top-up', w.sendTransaction({ to: env.SELLER_GAS_ADDRESS, value: GAS_TOPUP }));
+if (allowance < need) await send('zUSDC approve Permit2', w.writeContract({ address: BASE.ZUSDC, abi: erc20Abi, functionName: 'approve', args: [PERMIT2_ADDRESS, WRAP] }),
+  async () => (await w.readContract({ address: BASE.ZUSDC, abi: erc20Abi, functionName: 'allowance', args: [buyer.address, PERMIT2_ADDRESS] })) >= need);
+if (sellerEth < GAS_TOPUP / 2n) await send('seller gas top-up', w.sendTransaction({ to: env.SELLER_GAS_ADDRESS, value: GAS_TOPUP }), async () => (await w.getBalance({ address: env.SELLER_GAS_ADDRESS })) >= GAS_TOPUP / 2n);
 
 const seller = await startSeller();
 const scheme = new ExactEvmScheme(buyer);
