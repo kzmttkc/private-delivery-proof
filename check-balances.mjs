@@ -1,5 +1,6 @@
 // Read-only: prints Base balances of the demo wallets. Sends nothing.
 import 'node:process';
+import { transport } from './lib/env.mjs';
 import fs from 'node:fs';
 import { createPublicClient, http, formatEther, formatUnits, erc20Abi } from 'viem';
 import { base } from 'viem/chains';
@@ -8,7 +9,7 @@ const env = Object.fromEntries(fs.readFileSync(new URL('.env', import.meta.url),
   .split('\n').filter(l => l.includes('=') && !l.startsWith('#')).map(l => l.split('=')));
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ZUSDC = '0xEB81ab55Bc7aa89d1e0E3F60597D86e37702Af53';
-const c = createPublicClient({ chain: base, transport: http(process.env.RPC_URL || 'https://mainnet.base.org') });
+const c = createPublicClient({ chain: base, transport: transport() });
 
 for (const name of ['BUYER_ADDRESS', 'SELLER_GAS_ADDRESS']) {
   const a = env[name];

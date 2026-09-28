@@ -9,19 +9,20 @@ import { ExactEvmScheme } from '@x402/evm/exact/client';
 import { PERMIT2_ADDRESS, x402ExactPermit2ProxyABI } from '@x402/evm';
 import { encodePaymentSignatureHeader, decodePaymentResponseHeader } from '@x402/core/http';
 import { verifyOfferSignatureEIP712 } from '@x402/extensions/offer-receipt';
-import { env, BASE } from './lib/env.mjs';
+import { env, BASE, transport } from './lib/env.mjs';
 import { startSeller, PRICE } from './seller.mjs';
 
 const N = Number(process.env.PURCHASES ?? 20);
 const WRAP = 1_000_000n; // 1 USDC
 const GAS_TOPUP = parseEther('0.001');
 const buyer = privateKeyToAccount(env.BUYER_KEY, { nonceManager });
-const w = createWalletClient({ account: buyer, chain: base, transport: http(BASE.rpc) }).extend(publicActions);
+const w = createWalletClient({ account: buyer, chain: base, transport: transport() }).extend(publicActions);
 const lmAbi = parseAbi(['function wrap(uint256 amount, address receiver) payable returns (uint256)']);
 const indexedAbi = parseAbi(['event IndexedTransfer(uint256 indexed index, address from, address to, uint256 value)']);
 const bal = (token, a) => w.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [a] });
 
-const need = BigInt(PRICE) * BigInt(N);
+const already = fs.existsSync(new URL('./records/', import.meta.url)) ? fs.readdirSync(new URL('./records/', import.meta.url)).filter((f) => f.endsWith('.json')).length : 0;
+const need = BigInt(PRICE) * BigInt(Math.max(N - already, 0));
 const [zBal, allowance, sellerEth, usdc, eth] = await Promise.all([
   bal(BASE.ZUSDC, buyer.address),
   w.readContract({ address: BASE.ZUSDC, abi: erc20Abi, functionName: 'allowance', args: [buyer.address, PERMIT2_ADDRESS] }),
@@ -31,7 +32,7 @@ const steps = [];
 if (zBal < need) steps.push(`USDC ${formatUnits(WRAP, 6)} を zUSDC に換える（zERC20 公式の LiquidityManager ${BASE.ZUSDC_LIQUIDITY_MANAGER}）`);
 if (allowance < need) steps.push(`Permit2 に zUSDC ${formatUnits(WRAP, 6)} までの引き落としを許可する`);
 if (sellerEth < GAS_TOPUP / 2n) steps.push(`売り手のガス用 ${env.SELLER_GAS_ADDRESS} へ ETH ${formatEther(GAS_TOPUP)} を送る`);
-steps.push(`テスト用の売り手から ${N} 回買う: 1回 ${formatUnits(BigInt(PRICE), 6)} zUSDC、宛先は毎回ちがう使い捨てアドレス（合計 ${formatUnits(need, 6)} zUSDC）`);
+steps.push(`テスト用の売り手から ${N - already} 回買う（${already} 件は記録済み）: 1回 ${formatUnits(BigInt(PRICE), 6)} zUSDC、宛先は毎回ちがう使い捨てアドレス（合計 ${formatUnits(need, 6)} zUSDC）`);
 
 console.log(`\nネットワーク: Base メインネット（${BASE.rpc}）`);
 console.log(`買い手: ${buyer.address}  残高 USDC ${formatUnits(usdc, 6)} / zUSDC ${formatUnits(zBal, 6)} / ETH ${formatEther(eth)}`);
@@ -67,19 +68,28 @@ fs.mkdirSync(new URL('./records/', import.meta.url), { recursive: true });
 const didFile = new URL('./public/did.json', import.meta.url);
 const didSha = fs.existsSync(didFile) ? sha256(fs.readFileSync(didFile)) : null;
 
-for (let i = 1; i <= N; i++) {
-  const r402 = await fetch(seller.url);
-  if (r402.status !== 402) throw new Error(`expected 402, got ${r402.status}`);
-  const pr = await r402.json();
-  const accepted = pr.accepts[0];
-  const offer = pr.extensions['offer-receipt'].info.offers[0];
-  const ov = await verifyOfferSignatureEIP712(offer);
-  if (ov.signer.toLowerCase() !== seller.signer.toLowerCase() || ov.payload.payTo !== accepted.payTo || ov.payload.amount !== accepted.amount || ov.payload.asset !== accepted.asset)
-    throw new Error('offer does not match the payment request');
-  const { x402Version, payload } = await scheme.createPaymentPayload(2, accepted);
-  const res = await fetch(seller.url, { headers: { 'PAYMENT-SIGNATURE': encodePaymentSignatureHeader({ x402Version, resource: pr.resource, accepted, payload }) } });
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (res.status !== 200) throw new Error(`purchase ${i}: ${res.status} ${bytes}`);
+const done = fs.readdirSync(new URL('./records/', import.meta.url)).filter((f) => f.endsWith('.json')).length; // resume after an interruption
+for (let i = done + 1; i <= N; i++) {
+  let pr, accepted, offer, payload, res, bytes;
+  for (let attempt = 1; ; attempt++) {
+    const r402 = await fetch(seller.url);
+    if (r402.status !== 402) throw new Error(`expected 402, got ${r402.status}`);
+    pr = await r402.json();
+    accepted = pr.accepts[0];
+    offer = pr.extensions['offer-receipt'].info.offers[0];
+    const ov = await verifyOfferSignatureEIP712(offer);
+    if (ov.signer.toLowerCase() !== seller.signer.toLowerCase() || ov.payload.payTo !== accepted.payTo || ov.payload.amount !== accepted.amount || ov.payload.asset !== accepted.asset)
+      throw new Error('offer does not match the payment request');
+    const created = await scheme.createPaymentPayload(2, accepted);
+    payload = created.payload;
+    res = await fetch(seller.url, { headers: { 'PAYMENT-SIGNATURE': encodePaymentSignatureHeader({ x402Version: created.x402Version, resource: pr.resource, accepted, payload }) } });
+    bytes = Buffer.from(await res.arrayBuffer());
+    if (res.status === 200) break;
+    // A failed pre-payment check moves no money, so it is safe to retry with a fresh offer. Anything else stops the run.
+    if (!String(bytes).startsWith('verify failed') || attempt >= 4) throw new Error(`purchase ${i}: ${res.status} ${bytes}`);
+    console.log(`  ${i}/${N} 事前チェックに失敗（${bytes}）。送金はしていません。${attempt * 5} 秒後にやり直します`);
+    await new Promise((ok) => setTimeout(ok, attempt * 5000));
+  }
   const settlement = decodePaymentResponseHeader(res.headers.get('PAYMENT-RESPONSE'));
   const tx = await w.getTransaction({ hash: settlement.transaction });
   const rcpt = await w.getTransactionReceipt({ hash: settlement.transaction });
@@ -97,6 +107,7 @@ for (let i = 1; i <= N; i++) {
   };
   fs.writeFileSync(new URL(`./records/${String(i).padStart(3, '0')}.json`, import.meta.url), JSON.stringify(record, null, 1));
   console.log(`  ${i}/${N} ${accepted.payTo} https://basescan.org/tx/${settlement.transaction}`);
+  await new Promise((ok) => setTimeout(ok, 2000));
 }
 seller.server.close();
 console.log(`\n完了: ${N} 件。記録は records/ にあります。検算: node verify.mjs records`);

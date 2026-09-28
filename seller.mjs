@@ -10,7 +10,7 @@ import { ExactEvmScheme } from '@x402/evm/exact/facilitator';
 import { toFacilitatorEvmSigner } from '@x402/evm';
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader, encodePaymentResponseHeader } from '@x402/core/http';
 import { createOfferEIP712, createReceiptEIP712 } from '@x402/extensions/offer-receipt';
-import { env, BASE } from './lib/env.mjs';
+import { env, BASE, transport } from './lib/env.mjs';
 import { signDelivery, requestHash, bodyHash } from './lib/delivery.mjs';
 
 export const PRICE = '10000'; // 0.01 zUSDC (6 decimals)
@@ -20,7 +20,7 @@ const PATH = '/v1/quote';
 const signKey = privateKeyToAccount(env.SELLER_SIGN_KEY);
 const signTypedData = (args) => signKey.signTypedData(args);
 const gas = privateKeyToAccount(env.SELLER_GAS_KEY, { nonceManager });
-const wallet = createWalletClient({ account: gas, chain: base, transport: viemHttp(BASE.rpc) }).extend(publicActions);
+const wallet = createWalletClient({ account: gas, chain: base, transport: transport() }).extend(publicActions);
 const facilitator = new ExactEvmScheme(toFacilitatorEvmSigner({ ...wallet, address: gas.address }));
 
 const poolFile = new URL('./seller-pool.json', import.meta.url);
