@@ -1,0 +1,61 @@
+{
+ "v": 0,
+ "purchase": 5,
+ "network": "eip155:8453",
+ "asset": "0xEB81ab55Bc7aa89d1e0E3F60597D86e37702Af53",
+ "resourceUrl": "http://127.0.0.1:4402/v1/quote",
+ "seller": {
+  "did": "did:web:kzmttkc.github.io:private-delivery-proof",
+  "signer": "0x0756ccc71B5245AEE3eFA7206536604551956001",
+  "didJsonSha256": "0x35fec1f7e9b0f0b0378794da5cfb90ba1da919c8ae92caafdbf875209300b79c"
+ },
+ "oneTimeAddress": "0x66d89B70236fF8EaCa76eC546Fcb8e493AbDB2cA",
+ "amount": "10000",
+ "payer": "0xd97588C1531a5283405A6A74D9f93d5822DDA57E",
+ "offer": {
+  "format": "eip712",
+  "acceptIndex": 0,
+  "payload": {
+   "version": 1,
+   "resourceUrl": "http://127.0.0.1:4402/v1/quote",
+   "scheme": "exact",
+   "network": "eip155:8453",
+   "asset": "0xEB81ab55Bc7aa89d1e0E3F60597D86e37702Af53",
+   "payTo": "0x66d89B70236fF8EaCa76eC546Fcb8e493AbDB2cA",
+   "amount": "10000",
+   "validUntil": 1790560364
+  },
+  "signature": "0xd08bd2db6f3be4db48bef931d46835df61457ff8577f1949515ac54c0a0bcad45feef29ca850ab55f6d530cc27a27a32feae8825157fc3dafdd5f23f905179661c"
+ },
+ "receipt": {
+  "format": "eip712",
+  "payload": {
+   "version": 1,
+   "network": "eip155:8453",
+   "resourceUrl": "http://127.0.0.1:4402/v1/quote",
+   "payer": "0xd97588C1531a5283405A6A74D9f93d5822DDA57E",
+   "issuedAt": 1790560066,
+   "transaction": "0xde55b488964cc439c897167903735805f20321e9137e58805959ece657133955"
+  },
+  "signature": "0x69b78c1aa5c9649832dc780a794ebf3eb9446166bb285fcd85701cc1ba4f72d45c1c25040103fc06e6635f9c10ebebddf5b819aa58bdd5111cf989f7bf3846151b"
+ },
+ "delivery": {
+  "format": "eip712",
+  "payload": {
+   "version": 0,
+   "network": "eip155:8453",
+   "resourceUrl": "http://127.0.0.1:4402/v1/quote",
+   "payer": "0xd97588C1531a5283405A6A74D9f93d5822DDA57E",
+   "transaction": "0xde55b488964cc439c897167903735805f20321e9137e58805959ece657133955",
+   "requestHash": "0xaa5c46402c6646d4cf7e22222a8a887c38f5c8133f554383b0f360f853bc9022",
+   "responseHash": "0x119695644a7f59fdd3ea0c7dae2630b9229cc8a6a248ab6e92191ced1ef3bda8",
+   "issuedAt": 1790560066
+  },
+  "signature": "0x20586f344046aaba93fcb3438a7d3f5bfc8355ae2cb17354e3440091c64536ca0d45cabe3821f80a12f71f3d116ac3da8c7182a608668476422d3b2375ab8c0e1b"
+ },
+ "tx": "0xde55b488964cc439c897167903735805f20321e9137e58805959ece657133955",
+ "block": 51885360,
+ "indexedTransfer": "387",
+ "permit2Nonce": "62174010167756174120753124660438529597310296109615898491127392711841561370594",
+ "responseBodyBase64": "eyJxdW90ZSI6IlRoZSBjaGVhcGVzdCwgZmFzdGVzdCBhbmQgbW9zdCByZWxpYWJsZSBjb21wb25lbnRzIGFyZSB0aG9zZSB0aGF0IGFyZSBub3QgdGhlcmUuIiwic2VydmVkQXQiOiIyMDI2LTA5LTI4VDAxOjQ3OjQ2LjQ2MFoiLCJvbmVUaW1lQWRkcmVzcyI6IjB4NjZkODlCNzAyMzZmRjhFYUNhNzZlQzU0NkZjYjhlNDkzQWJEQjJjQSJ9"
+}
